@@ -105,12 +105,18 @@ struct SettingsView: View {
                 }
 
                 HStack {
+                    Text("Push to Talk")
+                        .frame(width: 150, alignment: .leading)
+                    KeyboardShortcuts.Recorder(for: .pushToTalk)
+                }
+
+                HStack {
                     Text("Cancel Recording")
                         .frame(width: 150, alignment: .leading)
                     KeyboardShortcuts.Recorder(for: .cancelRecording)
                 }
 
-                Text("Use the shortcut from any app to start/stop dictation.")
+                Text("Toggle Recording: press once to start, press again to stop. Push to Talk: hold to record, release to stop.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

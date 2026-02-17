@@ -27,8 +27,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.customwhisper.CustomWhisper
         PRODUCT_NAME: CustomWhisper
-        MARKETING_VERSION: "0.2.0"
-        CURRENT_PROJECT_VERSION: "3"
+        MARKETING_VERSION: "0.3.0"
+        CURRENT_PROJECT_VERSION: "4"
         SWIFT_VERSION: "5.9"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"

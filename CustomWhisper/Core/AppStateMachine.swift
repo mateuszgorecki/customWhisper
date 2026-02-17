@@ -102,6 +102,16 @@ final class AppStateMachine {
             self?.cancel()
         }
 
+        KeyboardShortcuts.onKeyDown(for: .pushToTalk) { [weak self] in
+            guard self?.state == .idle else { return }
+            self?.startRecording()
+        }
+
+        KeyboardShortcuts.onKeyUp(for: .pushToTalk) { [weak self] in
+            guard self?.state == .recording else { return }
+            self?.stopRecordingAndTranscribe()
+        }
+
         // Start with cancel shortcut disabled so Escape passes through to other apps.
         // It will be enabled only while recording.
         KeyboardShortcuts.disable(.cancelRecording)
