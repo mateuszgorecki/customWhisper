@@ -1,0 +1,41 @@
+name: Build macOS app
+
+on:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Build Release app
+        run: |
+          xcodebuild \
+            -project "CustomWhisper.xcodeproj" \
+            -scheme "CustomWhisper" \
+            -configuration "Release" \
+            -destination "platform=macOS" \
+            -derivedDataPath ".build/DerivedData" \
+            build
+
+      - name: Package app
+        run: |
+          APP_PATH=".build/DerivedData/Build/Products/Release/CustomWhisper.app"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "CustomWhisper.app.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: customwhisper-macos-app
+          path: CustomWhisper.app.zip

@@ -31,10 +31,13 @@ dist/
 build/
 
 # Swift / Xcode
-*.xcodeproj/xcuserdata/
-*.xcworkspace/xcuserdata/
+*.xcodeproj/
+*.xcworkspace/
 DerivedData/
 .build/
+.swiftpm/
+Package.resolved
+xcuserdata/
 
 # General build artifacts
 *.o
