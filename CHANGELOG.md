@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-02-17
+
+### Fixed
+
+- Accessibility permission check now uses a runtime CGEventTap probe instead of relying on the TCC database, which returns stale results after ad-hoc rebuilds
+- Settings view shows a distinct "Stale" warning (orange) when the TCC entry is outdated, with a one-click "Reset & Re-grant" button to clear and re-authorize
+- Permission polling replaced with on-activation refresh to avoid unnecessary kernel object churn
+
 ## [0.1.1] - 2026-02-17
 
 ### Fixed

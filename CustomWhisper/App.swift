@@ -27,7 +27,9 @@ struct CustomWhisperApp: App {
             await stateMachine.loadModelFromSettings()
         }
 
-        if !Permissions.isAccessibilityGranted {
+        if Permissions.isAccessibilityStale {
+            print("[Permissions] Accessibility permission is stale (TCC entry outdated after rebuild). Auto-paste will not work until re-granted via Settings > Permissions.")
+        } else if !Permissions.isAccessibilityGranted {
             Permissions.requestAccessibility()
         }
     }

@@ -40,25 +40,59 @@ enum Permissions {
     }
 
 
-    /// Check if the app has Accessibility permission (needed for CGEvent posting / auto-paste).
-    /// Uses `AXIsProcessTrustedWithOptions` as primary check, with a runtime CGEvent fallback
-    /// to handle cases where the TCC database entry is stale (e.g. after ad-hoc rebuild).
-    static var isAccessibilityGranted: Bool {
-        if AXIsProcessTrustedWithOptions(accessibilityStatusOptions) {
-            return true
-        }
-        return canPostCGEvents()
+    // MARK: - Accessibility (cached runtime check)
+
+    private static var cachedAccessibility: Bool?
+
+    /// Invalidate the cached accessibility result so the next access re-checks at the kernel level.
+    /// Call this when the app is re-activated (returning from System Settings) or on manual refresh.
+    static func invalidateAccessibilityCache() {
+        cachedAccessibility = nil
     }
 
-    /// Runtime test: attempt to create a CGEvent to verify we actually have accessibility access.
-    /// This catches cases where TCC reports false but the process actually has permission,
-    /// or where the TCC entry is stale after a code signature change.
-    private static func canPostCGEvents() -> Bool {
-        let source = CGEventSource(stateID: .hidSystemState)
-        guard let event = CGEvent(keyboardEventSource: source, virtualKey: 0xFFFF, keyDown: true) else {
-            return false
-        }
-        return event.type == .keyDown
+    /// Check if the app **actually** has Accessibility permission by attempting to create a
+    /// `CGEventTap`.  This is the kernel-level check that correctly rejects stale TCC entries
+    /// (e.g. after an ad-hoc rebuild changes the code signature).
+    /// The result is cached; call `invalidateAccessibilityCache()` to force a re-check.
+    static var isAccessibilityGranted: Bool {
+        if let cached = cachedAccessibility { return cached }
+        let result = canCreateEventTap()
+        cachedAccessibility = result
+        return result
+    }
+
+    /// `true` when the TCC database reports the permission as granted but the runtime check
+    /// disagrees -- typically caused by a stale entry after rebuild.
+    static var isAccessibilityStale: Bool {
+        let tccGranted = AXIsProcessTrustedWithOptions(accessibilityStatusOptions)
+        return tccGranted && !isAccessibilityGranted
+    }
+
+    /// Runtime test: attempt to create a passive, listen-only `CGEventTap`.
+    /// Creating a tap requires actual accessibility permission at the kernel level;
+    /// it returns `nil` when the process is not trusted, regardless of TCC cache state.
+    /// The tap is never added to a run loop -- we only test `!= nil` and let it deallocate.
+    private static func canCreateEventTap() -> Bool {
+        let tap = CGEvent.tapCreate(
+            tap: .cghidEventTap,
+            place: .headInsertEventTap,
+            options: .listenOnly,
+            eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
+            callback: { _, _, event, _ in Unmanaged.passUnretained(event) },
+            userInfo: nil
+        )
+        return tap != nil
+    }
+
+    /// Clear the stale TCC entry for this app's Accessibility permission using `tccutil`.
+    /// After calling this the user must re-grant the permission in System Settings.
+    static func resetAccessibilityPermission() {
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.customwhisper.CustomWhisper"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        process.arguments = ["reset", "Accessibility", bundleID]
+        try? process.run()
+        process.waitUntilExit()
     }
 
     /// Prompt the user to grant Accessibility permission.

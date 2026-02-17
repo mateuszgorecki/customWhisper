@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var isRedownloading = false
     @State private var microphoneStatus: MicrophonePermissionStatus = Permissions.microphonePermissionStatus
     @State private var accessibilityGranted: Bool = Permissions.isAccessibilityGranted
+    @State private var accessibilityStale: Bool = Permissions.isAccessibilityStale
     @State private var shouldAutoRelaunchOnPermissionGrant = false
 
     var body: some View {
@@ -31,10 +32,8 @@ struct SettingsView: View {
             refreshPermissionStates()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Permissions.invalidateAccessibilityCache()
             handleReturnFromSystemSettings()
-        }
-        .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
-            refreshPermissionStates()
         }
     }
 
@@ -195,6 +194,21 @@ struct SettingsView: View {
                     if accessibilityGranted {
                         Label("Accessibility: Granted", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
+                    } else if accessibilityStale {
+                        Label("Accessibility: Stale", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+
+                        Spacer()
+
+                        Button("Reset & Re-grant") {
+                            shouldAutoRelaunchOnPermissionGrant = true
+                            Permissions.resetAccessibilityPermission()
+                            Permissions.invalidateAccessibilityCache()
+                            Permissions.requestAccessibility()
+                            Permissions.relaunchApplication()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                     } else {
                         Label("Accessibility: Not Granted", systemImage: "xmark.circle.fill")
                             .foregroundStyle(.red)
@@ -209,6 +223,12 @@ struct SettingsView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                     }
+                }
+
+                if accessibilityStale {
+                    Text("Permission was invalidated by a rebuild. Click \"Reset & Re-grant\" to clear the stale entry and re-authorize.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
 
                 if shouldAutoRelaunchOnPermissionGrant {
@@ -282,6 +302,7 @@ struct SettingsView: View {
     private func refreshPermissionStates() {
         microphoneStatus = Permissions.microphonePermissionStatus
         accessibilityGranted = Permissions.isAccessibilityGranted
+        accessibilityStale = Permissions.isAccessibilityStale
     }
 
     private func handleReturnFromSystemSettings() {
