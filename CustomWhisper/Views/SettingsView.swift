@@ -13,8 +13,7 @@ struct SettingsView: View {
 
     @State private var isRedownloading = false
     @State private var microphoneStatus: MicrophonePermissionStatus = Permissions.microphonePermissionStatus
-    @State private var accessibilityGranted: Bool = Permissions.isAccessibilityGranted
-    @State private var accessibilityStale: Bool = Permissions.isAccessibilityStale
+    @State private var accessibilityPermissionState: AccessibilityPermissionState = Permissions.accessibilityPermissionSnapshot().state
     @State private var shouldAutoRelaunchOnPermissionGrant = false
 
     var body: some View {
@@ -32,7 +31,6 @@ struct SettingsView: View {
             refreshPermissionStates()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            Permissions.invalidateAccessibilityCache()
             handleReturnFromSystemSettings()
         }
     }
@@ -197,10 +195,10 @@ struct SettingsView: View {
                 }
 
                 HStack {
-                    if accessibilityGranted {
+                    if accessibilityPermissionState == .granted {
                         Label("Accessibility: Granted", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
-                    } else if accessibilityStale {
+                    } else if accessibilityPermissionState == .stale {
                         Label("Accessibility: Stale", systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
 
@@ -211,7 +209,7 @@ struct SettingsView: View {
                             Permissions.resetAccessibilityPermission()
                             Permissions.invalidateAccessibilityCache()
                             Permissions.requestAccessibility()
-                            Permissions.relaunchApplication()
+                            Permissions.openAccessibilitySettings()
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -231,7 +229,7 @@ struct SettingsView: View {
                     }
                 }
 
-                if accessibilityStale {
+                if accessibilityPermissionState == .stale {
                     Text("Permission was invalidated by a rebuild. Click \"Reset & Re-grant\" to clear the stale entry and re-authorize.")
                         .font(.caption)
                         .foregroundStyle(.orange)
@@ -305,24 +303,29 @@ struct SettingsView: View {
         }
     }
 
-    private func refreshPermissionStates() {
+    private func refreshPermissionStates(forceRefreshAccessibility: Bool = false) {
         microphoneStatus = Permissions.microphonePermissionStatus
-        accessibilityGranted = Permissions.isAccessibilityGranted
-        accessibilityStale = Permissions.isAccessibilityStale
+        accessibilityPermissionState = Permissions.accessibilityPermissionSnapshot(
+            forceRefreshRuntime: forceRefreshAccessibility
+        ).state
     }
 
     private func handleReturnFromSystemSettings() {
         let previousMicrophoneStatus = microphoneStatus
-        let previousAccessibilityGranted = accessibilityGranted
-        refreshPermissionStates()
+        let previousAccessibilityState = accessibilityPermissionState
+        refreshPermissionStates(forceRefreshAccessibility: true)
 
         guard shouldAutoRelaunchOnPermissionGrant else { return }
         let microphoneGrantedNow = previousMicrophoneStatus != .authorized && microphoneStatus == .authorized
-        let accessibilityGrantedNow = !previousAccessibilityGranted && accessibilityGranted
+        let accessibilityGrantedNow = previousAccessibilityState != .granted && accessibilityPermissionState == .granted
 
         if microphoneGrantedNow || accessibilityGrantedNow {
+            shouldAutoRelaunchOnPermissionGrant = false
             Permissions.relaunchApplication()
+            return
         }
+
+        shouldAutoRelaunchOnPermissionGrant = false
     }
 }
 

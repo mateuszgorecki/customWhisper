@@ -1,13 +1,29 @@
 import ApplicationServices
 import AppKit
 import AVFoundation
-import CoreGraphics
 
 enum MicrophonePermissionStatus {
     case authorized
     case denied
     case restricted
     case notDetermined
+}
+
+enum AccessibilityPermissionState {
+    case granted
+    case stale
+    case notGranted
+}
+
+struct AccessibilityPermissionSnapshot {
+    let tccGranted: Bool
+    let runtimeGranted: Bool
+
+    var state: AccessibilityPermissionState {
+        if runtimeGranted { return .granted }
+        if tccGranted { return .stale }
+        return .notGranted
+    }
 }
 
 enum Permissions {
@@ -50,38 +66,59 @@ enum Permissions {
         cachedAccessibility = nil
     }
 
-    /// Check if the app **actually** has Accessibility permission by attempting to create a
-    /// `CGEventTap`.  This is the kernel-level check that correctly rejects stale TCC entries
-    /// (e.g. after an ad-hoc rebuild changes the code signature).
-    /// The result is cached; call `invalidateAccessibilityCache()` to force a re-check.
-    static var isAccessibilityGranted: Bool {
-        if let cached = cachedAccessibility { return cached }
-        let result = canCreateEventTap()
+    /// Runtime accessibility check with optional cache bypass.
+    private static func runtimeAccessibilityGranted(forceRefresh: Bool) -> Bool {
+        if !forceRefresh, let cached = cachedAccessibility {
+            return cached
+        }
+
+        let result = canAccessAccessibilityAPI()
         cachedAccessibility = result
         return result
+    }
+
+    /// Build a single snapshot so UI and behavior use one coherent source of truth.
+    static func accessibilityPermissionSnapshot(forceRefreshRuntime: Bool = false) -> AccessibilityPermissionSnapshot {
+        let tccGranted = AXIsProcessTrustedWithOptions(accessibilityStatusOptions)
+        let runtimeGranted = runtimeAccessibilityGranted(forceRefresh: forceRefreshRuntime)
+        return AccessibilityPermissionSnapshot(tccGranted: tccGranted, runtimeGranted: runtimeGranted)
+    }
+
+    /// Check if the app **actually** has Accessibility permission by probing AX runtime APIs.
+    /// This catches stale TCC entries where database state and effective runtime access disagree.
+    /// The result is cached; call `invalidateAccessibilityCache()` to force a re-check.
+    static var isAccessibilityGranted: Bool {
+        accessibilityPermissionSnapshot().runtimeGranted
     }
 
     /// `true` when the TCC database reports the permission as granted but the runtime check
     /// disagrees -- typically caused by a stale entry after rebuild.
     static var isAccessibilityStale: Bool {
-        let tccGranted = AXIsProcessTrustedWithOptions(accessibilityStatusOptions)
-        return tccGranted && !isAccessibilityGranted
+        accessibilityPermissionSnapshot().state == .stale
     }
 
-    /// Runtime test: attempt to create a passive, listen-only `CGEventTap`.
-    /// Creating a tap requires actual accessibility permission at the kernel level;
-    /// it returns `nil` when the process is not trusted, regardless of TCC cache state.
-    /// The tap is never added to a run loop -- we only test `!= nil` and let it deallocate.
-    private static func canCreateEventTap() -> Bool {
-        let tap = CGEvent.tapCreate(
-            tap: .cghidEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
-            callback: { _, _, event, _ in Unmanaged.passUnretained(event) },
-            userInfo: nil
+    /// Runtime test: query system-wide AX attributes.
+    /// Without Accessibility permission, AX APIs return `.apiDisabled`.
+    /// With permission, they typically return `.success` or `.noValue` depending on UI context.
+    private static func canAccessAccessibilityAPI() -> Bool {
+        let systemWide = AXUIElementCreateSystemWide()
+        var focusedApp: CFTypeRef?
+        let appResult = AXUIElementCopyAttributeValue(
+            systemWide,
+            kAXFocusedApplicationAttribute as CFString,
+            &focusedApp
         )
-        return tap != nil
+        if appResult == .success || appResult == .noValue {
+            return true
+        }
+
+        var focusedElement: CFTypeRef?
+        let elementResult = AXUIElementCopyAttributeValue(
+            systemWide,
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedElement
+        )
+        return elementResult == .success || elementResult == .noValue
     }
 
     /// Clear the stale TCC entry for this app's Accessibility permission using `tccutil`.

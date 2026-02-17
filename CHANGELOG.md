@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-02-17
+
+### Fixed
+- Switched accessibility runtime verification to AX API probing so granted permission no longer appears as stale after re-authorization.
+
+## [0.3.1] - 2026-02-17
+
+### Fixed
+- Corrected accessibility permission state handling so stale/not-granted/granted status and restart behavior stay in sync with actual System Settings changes.
+
 ## [0.3.0] - 2026-02-17
 
 ### Added
