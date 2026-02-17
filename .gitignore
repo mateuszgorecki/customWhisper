@@ -8,6 +8,8 @@ Thumbs.db
 *.swp
 *.swo
 *~
+.cursor/
+
 
 # Environment
 .env
