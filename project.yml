@@ -42,10 +42,6 @@ targets:
       - package: FluidAudio
         product: FluidAudio
       - package: KeyboardShortcuts
-    info:
-      path: CustomWhisper/Info.plist
-      properties:
-        NSMicrophoneUsageDescription: CustomWhisper needs microphone access to record your speech for transcription.
     entitlements:
       path: CustomWhisper/CustomWhisper.entitlements
       properties:
