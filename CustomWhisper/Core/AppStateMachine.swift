@@ -72,6 +72,7 @@ final class AppStateMachine {
     /// Cancel the current recording without transcribing.
     func cancel() {
         guard state == .recording else { return }
+        KeyboardShortcuts.disable(.cancelRecording)
         recorder.cancelRecording()
         stopOverlayUpdates()
         state = .idle
@@ -100,6 +101,10 @@ final class AppStateMachine {
         KeyboardShortcuts.onKeyUp(for: .cancelRecording) { [weak self] in
             self?.cancel()
         }
+
+        // Start with cancel shortcut disabled so Escape passes through to other apps.
+        // It will be enabled only while recording.
+        KeyboardShortcuts.disable(.cancelRecording)
     }
 
     // MARK: - Private - Recording
@@ -125,6 +130,7 @@ final class AppStateMachine {
             do {
                 try self.recorder.startRecording()
                 self.state = .recording
+                KeyboardShortcuts.enable(.cancelRecording)
                 self.overlayController?.show(state: .recording)
                 self.startOverlayUpdates()
             } catch {
@@ -134,6 +140,7 @@ final class AppStateMachine {
     }
 
     private func stopRecordingAndTranscribe() {
+        KeyboardShortcuts.disable(.cancelRecording)
         let samples = recorder.stopRecording()
         stopOverlayUpdates()
         state = .processing
