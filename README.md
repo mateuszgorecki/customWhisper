@@ -210,6 +210,12 @@ CustomWhisper/
 
 ---
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes in each version.
+
+---
+
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.

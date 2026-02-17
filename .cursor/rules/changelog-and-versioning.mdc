@@ -1,0 +1,59 @@
+---
+description: After implementing any feature, fix, or change, update CHANGELOG.md and bump the version in project.yml
+alwaysApply: true
+---
+
+# Changelog and Versioning Workflow
+
+After completing any implementation task (feature, fix, refactor, removal), perform these steps before finishing:
+
+## 1. Update CHANGELOG.md
+
+Add an entry under `## [Unreleased]` in the appropriate category:
+
+- **Added** -- new features or capabilities
+- **Changed** -- modifications to existing functionality
+- **Deprecated** -- features marked for future removal
+- **Removed** -- features that were deleted
+- **Fixed** -- bug fixes
+- **Security** -- vulnerability patches
+
+Each entry should be a concise, user-facing description starting with a verb. Example:
+
+```markdown
+## [Unreleased]
+
+### Added
+- Push-to-talk mode: hold the shortcut to record, release to stop
+```
+
+## 2. Bump the version in project.yml
+
+Update `MARKETING_VERSION` (line ~30) following semantic versioning:
+
+| Change type | Bump | Example |
+|---|---|---|
+| Bug fix, minor tweak | PATCH | 0.2.0 -> 0.2.1 |
+| New feature (backward-compatible) | MINOR | 0.2.1 -> 0.3.0 |
+| Breaking / incompatible change | MAJOR | 0.3.0 -> 1.0.0 |
+
+Also increment `CURRENT_PROJECT_VERSION` (build number, line ~31) by 1.
+
+## 3. Promote Unreleased to a versioned section
+
+Move entries from `[Unreleased]` into a new section with the version and today's date:
+
+```markdown
+## [Unreleased]
+
+## [0.2.0] - 2026-02-18
+
+### Added
+- Push-to-talk mode: hold the shortcut to record, release to stop
+```
+
+## Key files
+
+- **Version source of truth**: `project.yml` -> `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION`
+- **Changelog**: `CHANGELOG.md` (root of repository)
+- `Info.plist` reads version from build settings automatically -- do NOT edit version there
