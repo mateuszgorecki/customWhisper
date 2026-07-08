@@ -13,6 +13,11 @@ enum AppConstants {
         /// Default correction model id (overridable in Settings).
         static let defaultCorrectionModel = "qwen/qwen3.6-35b-a3b"
 
+        /// Batch size (characters) used for LM Studio correction when the model's
+        /// context window can't be auto-detected. Conservative on purpose: safe for a
+        /// ~4k-token window even with a reasoning model that echoes a large `<think>` block.
+        static let defaultCorrectionMaxChars = 1_800
+
         /// Audio containers we accept for import (decoded via ffmpeg).
         static let acceptedExtensions = ["ogg", "opus", "mp3", "m4a", "wav", "flac", "aac", "caf"]
 
@@ -31,6 +36,8 @@ enum AppConstants {
         static let correctionModel = "correctionModel"
         static let autoCorrectAfterTranscription = "autoCorrectAfterTranscription"
         static let meetingOutputFolder = "meetingOutputFolder"
+        /// Manual override for correction batch size (chars). 0 / unset = auto-detect.
+        static let correctionMaxCharsOverride = "correctionMaxCharsOverride"
     }
 
     enum ModelVersion: String, CaseIterable, Identifiable {

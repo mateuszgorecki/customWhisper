@@ -19,6 +19,8 @@ struct SettingsView: View {
     private var autoCorrectAfterTranscription = false
     @AppStorage(AppConstants.DefaultsKey.meetingOutputFolder)
     private var meetingOutputFolder = ""
+    @AppStorage(AppConstants.DefaultsKey.correctionMaxCharsOverride)
+    private var correctionMaxCharsOverride = 0
 
     @State private var availableModels: [String] = []
     @State private var isLoadingModels = false
@@ -229,6 +231,18 @@ struct SettingsView: View {
                     }
 
                     Text("Fixes spelling, punctuation, and mis-heard words without changing meaning. Requires LM Studio running with a model loaded.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    HStack {
+                        Text("Batch size")
+                        TextField("Auto", value: $correctionMaxCharsOverride, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 90)
+                        Text("chars")
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("Characters per correction request. 0 = auto — sized to the LM Studio model's context window so long transcripts are chunked to fit any model.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
