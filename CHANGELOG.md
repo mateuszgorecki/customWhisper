@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-08
+
+### Added
+- Meeting transcription: import an audio file (.ogg, .opus, .mp3, .m4a, .wav, .flac, .aac, .caf) from a new "Meetings" tab and transcribe it locally with Parakeet. Files are decoded via ffmpeg, so Ogg/Opus recordings work.
+- Optional local correction of a transcript with a model served by LM Studio (fixes spelling, punctuation, and mis-heard words without changing meaning); the corrected version is saved separately from the raw transcript.
+- Transcripts can be exported to a chosen folder as `<name>.txt` (raw) and `<name>.corrected.txt` (corrected), and are always kept in the app's meeting history.
+- Settings: output folder, LM Studio URL, correction model picker, and an "auto-correct after transcription" toggle.
+
+### Changed
+- All speech recognition now runs through a single serialized actor, so live dictation and meeting-file transcription can never run at the same time and corrupt each other.
+- Pinned FluidAudio to 0.7.9 (newer releases fail to build under the current Swift toolchain).
+
 ## [0.3.2] - 2026-02-17
 
 ### Fixed

@@ -4,6 +4,35 @@ enum AppConstants {
     static let appName = "CustomWhisper"
     static let defaultModelVersion = "v3"
 
+    // MARK: - Meeting transcription
+
+    /// Meeting-file transcription + local LLM correction settings.
+    enum Meeting {
+        /// Default LM Studio OpenAI-compatible base URL (no trailing slash).
+        static let defaultLMStudioBaseURL = "http://localhost:1234/v1"
+        /// Default correction model id (overridable in Settings).
+        static let defaultCorrectionModel = "qwen/qwen3.6-35b-a3b"
+
+        /// Audio containers we accept for import (decoded via ffmpeg).
+        static let acceptedExtensions = ["ogg", "opus", "mp3", "m4a", "wav", "flac", "aac", "caf"]
+
+        // Rough temp-footprint estimates used by the ffprobe preflight.
+        /// 16 kHz mono s16 WAV ≈ 32 KB/s ≈ 115 MB/hour.
+        static let estimatedWavBytesPerSecond: Int = 32_000
+        /// FluidAudio's on-disk raw Float32 stream ≈ 64 KB/s ≈ 230 MB/hour.
+        static let estimatedRawFloatBytesPerSecond: Int = 64_000
+        /// Extra free-space safety margin required beyond the estimate.
+        static let freeSpaceSafetyMarginBytes: Int = 200 * 1_024 * 1_024
+    }
+
+    /// UserDefaults keys shared across the app.
+    enum DefaultsKey {
+        static let lmStudioBaseURL = "lmStudioBaseURL"
+        static let correctionModel = "correctionModel"
+        static let autoCorrectAfterTranscription = "autoCorrectAfterTranscription"
+        static let meetingOutputFolder = "meetingOutputFolder"
+    }
+
     enum ModelVersion: String, CaseIterable, Identifiable {
         case v2 = "v2"
         case v3 = "v3"
