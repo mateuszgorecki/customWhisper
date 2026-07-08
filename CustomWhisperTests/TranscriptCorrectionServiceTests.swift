@@ -76,6 +76,152 @@ final class TranscriptCorrectionServiceTests: XCTestCase {
         XCTAssertEqual(batches, [["a", "b"]])
     }
 
+    // MARK: - Long-paragraph splitting (the newline-free-transcript fix)
+
+    func testSplitLongParagraphLeavesShortTextUntouched() {
+        let text = "This is short. It fits."
+        XCTAssertEqual(TranscriptCorrectionService.splitLongParagraph(text, maxChars: 1000), [text])
+    }
+
+    func testSplitLongParagraphBreaksOnSentences() {
+        // Five ~20-char sentences, no newlines; cap forces multiple chunks each ≤ cap.
+        let sentence = "Ala ma kota i psa. "
+        let text = String(repeating: sentence, count: 10).trimmingCharacters(in: .whitespaces)
+        let chunks = TranscriptCorrectionService.splitLongParagraph(text, maxChars: 60)
+        XCTAssertGreaterThan(chunks.count, 1)
+        for chunk in chunks {
+            XCTAssertLessThanOrEqual(chunk.count, 60)
+        }
+    }
+
+    func testSplitLongParagraphHardCutsWordWithoutPunctuation() {
+        // No sentence punctuation, no spaces, longer than the cap → hard character cut.
+        let text = String(repeating: "x", count: 250)
+        let chunks = TranscriptCorrectionService.splitLongParagraph(text, maxChars: 100)
+        XCTAssertEqual(chunks.count, 3)
+        for chunk in chunks {
+            XCTAssertLessThanOrEqual(chunk.count, 100)
+        }
+        XCTAssertEqual(chunks.joined().count, 250)
+    }
+
+    func testBatchingSplitsNewlineFreeTranscript() {
+        // Regression: an ASR transcript is one continuous string with no '\n'. It must
+        // still be broken into multiple batches instead of one oversized request.
+        let text = String(repeating: "To jest zdanie testowe. ", count: 100)
+            .trimmingCharacters(in: .whitespaces)
+        let batches = TranscriptCorrectionService.batchParagraphs(text, maxChars: 200)
+        XCTAssertGreaterThan(batches.count, 1)
+        for batch in batches {
+            let total = batch.reduce(0) { $0 + $1.count }
+            XCTAssertLessThanOrEqual(total, 200 + 1) // greedy grouping stays under the cap
+        }
+    }
+
+    // MARK: - Context-window budget
+
+    func testRecommendedMaxCharsGrowsWithContext() {
+        let small = TranscriptCorrectionService.recommendedMaxChars(contextTokens: 4096)
+        let large = TranscriptCorrectionService.recommendedMaxChars(contextTokens: 16384)
+        XCTAssertGreaterThan(large, small)
+        XCTAssertGreaterThanOrEqual(small, 800) // never below the floor
+    }
+
+    func testRecommendedMaxCharsSmallContextStaysSafe() {
+        // Input chars + reasoning echo must plausibly fit a small window. With echoFactor 3
+        // and ~2 chars/token, a 4096 window should not budget anywhere near 4096 chars.
+        let chars = TranscriptCorrectionService.recommendedMaxChars(contextTokens: 4096)
+        XCTAssertLessThan(chars, 3000)
+    }
+
+    func testParseContextLengthPrefersLoadedWindow() {
+        let obj: [String: Any] = ["data": [
+            ["id": "m", "max_context_length": 32768, "loaded_context_length": 8192],
+        ]]
+        let data = try! JSONSerialization.data(withJSONObject: obj)
+        XCTAssertEqual(TranscriptCorrectionService.parseContextLength(from: data, model: "m"), 8192)
+    }
+
+    func testParseContextLengthDiscountsMaxWhenNoLoaded() {
+        let obj: [String: Any] = ["data": [["id": "m", "max_context_length": 8000]]]
+        let data = try! JSONSerialization.data(withJSONObject: obj)
+        // Halved by the safety factor rather than trusting the raw max.
+        XCTAssertEqual(TranscriptCorrectionService.parseContextLength(from: data, model: "m"), 4000)
+    }
+
+    func testParseContextLengthNilForMissingModelOrGarbage() {
+        let obj: [String: Any] = ["data": [["id": "other", "loaded_context_length": 8192]]]
+        let data = try! JSONSerialization.data(withJSONObject: obj)
+        XCTAssertNil(TranscriptCorrectionService.parseContextLength(from: data, model: "m"))
+        XCTAssertNil(TranscriptCorrectionService.parseContextLength(from: Data("nope".utf8), model: "m"))
+    }
+
+    // MARK: - Per-batch error isolation
+
+    func testCorrectKeepsRawForFailedBatchAndContinues() async throws {
+        // First chat batch fails with HTTP 400; the rest succeed. Result must be complete.
+        let mock = MockHTTPClient { request in
+            let path = request.url!.path
+            if path.hasSuffix("/api/v0/models") {
+                return (Data("{}".utf8), httpResponse(request.url!, 404)) // no detection
+            }
+            let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+            let messages = body["messages"] as! [[String: String]]
+            let userContent = messages.last!["content"]!
+            if userContent.contains("BOOM") {
+                return (Data("context overflow".utf8), httpResponse(request.url!, 400))
+            }
+            let count = userContent.components(separatedBy: "⟦SEG:").count - 1
+            var lines: [String] = []
+            for i in 0..<count {
+                lines.append(TranscriptCorrectionService.marker(i))
+                lines.append("OK\(i)")
+            }
+            lines.append(TranscriptCorrectionService.endSentinel)
+            return (chatJSON(content: lines.joined(separator: "\n")), httpResponse(request.url!, 200))
+        }
+        let service = TranscriptCorrectionService(client: mock, maxCharsPerBatch: 20)
+        // Two paragraphs → two batches (cap 20). One carries the BOOM sentinel word.
+        let result = try await service.correct("keep this line\nBOOM here now")
+        XCTAssertTrue(result.contains("BOOM here now")) // failed batch kept raw
+        XCTAssertTrue(result.contains("OK0"))           // successful batch corrected
+    }
+
+    func testCorrectThrowsWhenEveryBatchFails() async {
+        let mock = MockHTTPClient { request in
+            (Data("down".utf8), httpResponse(request.url!, 503))
+        }
+        let service = TranscriptCorrectionService(client: mock, maxCharsPerBatch: 1000)
+        do {
+            _ = try await service.correct("only one batch here")
+            XCTFail("Expected an error when all batches fail")
+        } catch let error as CorrectionError {
+            guard case .httpError(let status, _) = error else {
+                return XCTFail("Expected httpError, got \(error)")
+            }
+            XCTAssertEqual(status, 503)
+        } catch {
+            XCTFail("Expected CorrectionError, got \(error)")
+        }
+    }
+
+    // MARK: - Context detection request
+
+    func testDetectContextTokensReturnsNilOnFailure() async {
+        let mock = MockHTTPClient { request in
+            (Data("nope".utf8), httpResponse(request.url!, 500))
+        }
+        let service = TranscriptCorrectionService(client: mock)
+        let tokens = await service.detectContextTokens()
+        XCTAssertNil(tokens)
+    }
+
+    func testNativeModelsRequestTargetsApiV0() throws {
+        let service = TranscriptCorrectionService(baseURL: "http://localhost:1234/v1", model: "m")
+        let request = try service.buildNativeModelsRequest()
+        XCTAssertEqual(request.url?.absoluteString, "http://localhost:1234/api/v0/models")
+    }
+
     // MARK: - Response parsing
 
     func testParseChatContent() throws {

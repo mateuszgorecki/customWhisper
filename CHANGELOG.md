@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-08
+
+### Added
+- Meeting correction now sizes each LM Studio request to the model's context window (auto-detected from LM Studio), so long transcripts are chunked to fit any model instead of overflowing smaller ones. A manual "Batch size" override is available in Settings (0 = auto).
+
+### Fixed
+- Long meeting transcripts are now actually split into multiple correction requests. Previously the whole transcript (a single continuous string from the recognizer) was sent as one request, which could overflow the context window of smaller correction models.
+- A single failed correction batch (e.g. context overflow or timeout) no longer discards the entire correction — that batch keeps its raw text and the rest still get corrected.
+
 ## [0.4.0] - 2026-07-08
 
 ### Added

@@ -77,6 +77,12 @@ final class MeetingTranscriber {
             ?? AppConstants.Meeting.defaultCorrectionModel
     }
 
+    /// Manual batch-size override (chars). 0 / unset → let the service auto-detect.
+    private var correctionMaxCharsOverride: Int? {
+        let value = UserDefaults.standard.integer(forKey: AppConstants.DefaultsKey.correctionMaxCharsOverride)
+        return value > 0 ? value : nil
+    }
+
     // MARK: - Pipeline
 
     /// Full flow for an imported audio file. Non-throwing: failures land in `.error`.
@@ -142,7 +148,9 @@ final class MeetingTranscriber {
     /// Run LM Studio correction on an existing transcript. Non-destructive: the raw text stays.
     func correct(_ record: MeetingTranscript) async {
         phase = .correcting(0)
-        let service = TranscriptCorrectionService(baseURL: lmStudioBaseURL, model: correctionModel)
+        let service = TranscriptCorrectionService(baseURL: lmStudioBaseURL,
+                                                  model: correctionModel,
+                                                  maxCharsPerBatch: correctionMaxCharsOverride)
 
         do {
             let corrected = try await service.correct(record.rawText) { [weak self] progress in
