@@ -11,6 +11,19 @@ struct SettingsView: View {
     @AppStorage("saveHistory") private var saveHistory = true
     @AppStorage("launchAtLogin") private var launchAtLogin = false
 
+    @AppStorage(AppConstants.DefaultsKey.lmStudioBaseURL)
+    private var lmStudioBaseURL = AppConstants.Meeting.defaultLMStudioBaseURL
+    @AppStorage(AppConstants.DefaultsKey.correctionModel)
+    private var correctionModel = AppConstants.Meeting.defaultCorrectionModel
+    @AppStorage(AppConstants.DefaultsKey.autoCorrectAfterTranscription)
+    private var autoCorrectAfterTranscription = false
+    @AppStorage(AppConstants.DefaultsKey.meetingOutputFolder)
+    private var meetingOutputFolder = ""
+
+    @State private var availableModels: [String] = []
+    @State private var isLoadingModels = false
+    @State private var modelsError: String?
+
     @State private var isRedownloading = false
     @State private var microphoneStatus: MicrophonePermissionStatus = Permissions.microphonePermissionStatus
     @State private var accessibilityPermissionState: AccessibilityPermissionState = Permissions.accessibilityPermissionSnapshot().state
@@ -22,6 +35,7 @@ struct SettingsView: View {
                 modelSection
                 shortcutsSection
                 behaviorSection
+                meetingSection
                 systemSection
                 permissionsSection
             }
@@ -136,6 +150,93 @@ struct SettingsView: View {
 
                 Toggle("Save transcription history", isOn: $saveHistory)
                 Text("Keep a record of all transcriptions for later review.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Meeting Section
+
+    @ViewBuilder
+    private var meetingSection: some View {
+        SettingsSection(title: "Meeting Transcription", icon: "person.wave.2") {
+            VStack(alignment: .leading, spacing: 12) {
+                // Output folder
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Output folder")
+                        .font(.subheadline.weight(.medium))
+                    HStack {
+                        Text(meetingOutputFolder.isEmpty ? "Not set — files won't be written to disk" : meetingOutputFolder)
+                            .font(.caption)
+                            .foregroundStyle(meetingOutputFolder.isEmpty ? .secondary : .primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer()
+                        if !meetingOutputFolder.isEmpty {
+                            Button("Clear") { meetingOutputFolder = "" }
+                                .buttonStyle(.borderless)
+                                .controlSize(.small)
+                        }
+                        Button("Choose…") { chooseOutputFolder() }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    Text("Transcripts are saved as <name>.txt and <name>.corrected.txt here. History is kept in the app regardless.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider()
+
+                // LM Studio correction
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Local correction (LM Studio)")
+                        .font(.subheadline.weight(.medium))
+
+                    TextField("LM Studio URL", text: $lmStudioBaseURL)
+                        .textFieldStyle(.roundedBorder)
+
+                    HStack {
+                        Picker("Model", selection: $correctionModel) {
+                            if !availableModels.contains(correctionModel) {
+                                Text(correctionModel).tag(correctionModel)
+                            }
+                            ForEach(availableModels, id: \.self) { model in
+                                Text(model).tag(model)
+                            }
+                        }
+                        .labelsHidden()
+
+                        Button {
+                            fetchModels()
+                        } label: {
+                            if isLoadingModels {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(isLoadingModels)
+                    }
+
+                    if let modelsError {
+                        Text(modelsError)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
+                    Text("Fixes spelling, punctuation, and mis-heard words without changing meaning. Requires LM Studio running with a model loaded.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider()
+
+                Toggle("Auto-correct after transcription", isOn: $autoCorrectAfterTranscription)
+                Text("Run the correction model automatically once a meeting is transcribed.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -279,6 +380,37 @@ struct SettingsView: View {
     }
 
     // MARK: - Helpers
+
+    private func chooseOutputFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        if panel.runModal() == .OK, let url = panel.url {
+            meetingOutputFolder = url.path
+        }
+    }
+
+    private func fetchModels() {
+        isLoadingModels = true
+        modelsError = nil
+        let service = TranscriptCorrectionService(baseURL: lmStudioBaseURL, model: correctionModel)
+        Task {
+            do {
+                let models = try await service.availableModels()
+                await MainActor.run {
+                    availableModels = models
+                    isLoadingModels = false
+                }
+            } catch {
+                await MainActor.run {
+                    modelsError = error.localizedDescription
+                    isLoadingModels = false
+                }
+            }
+        }
+    }
 
     private func redownloadModel() {
         isRedownloading = true

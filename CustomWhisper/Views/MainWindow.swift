@@ -12,6 +12,11 @@ struct MainWindow: View {
                     Label("Settings", systemImage: "gear")
                 }
 
+            MeetingsView()
+                .tabItem {
+                    Label("Meetings", systemImage: "person.wave.2")
+                }
+
             HistoryView()
                 .tabItem {
                     Label("History", systemImage: "clock")

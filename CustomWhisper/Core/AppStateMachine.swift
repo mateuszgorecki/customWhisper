@@ -37,6 +37,9 @@ final class AppStateMachine {
 
     var overlayController: RecordingOverlayController?
 
+    /// Lets a running meeting-file transcription veto starting live dictation (set in App wiring).
+    var isMeetingBusy: () -> Bool = { false }
+
     // MARK: - Private
 
     private var overlayUpdateTimer: Timer?
@@ -120,6 +123,11 @@ final class AppStateMachine {
     // MARK: - Private - Recording
 
     private func startRecording() {
+        guard !isMeetingBusy() else {
+            state = .error("A meeting file is being transcribed. Please wait for it to finish.")
+            return
+        }
+
         Task { @MainActor [weak self] in
             guard let self else { return }
 

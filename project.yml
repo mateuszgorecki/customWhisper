@@ -10,7 +10,7 @@ options:
 packages:
   FluidAudio:
     url: https://github.com/FluidInference/FluidAudio.git
-    from: "0.7.9"
+    exactVersion: "0.7.9"
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     from: "2.4.0"
@@ -27,8 +27,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.customwhisper.CustomWhisper
         PRODUCT_NAME: CustomWhisper
-        MARKETING_VERSION: "0.3.2"
-        CURRENT_PROJECT_VERSION: "6"
+        MARKETING_VERSION: "0.4.0"
+        CURRENT_PROJECT_VERSION: "7"
         SWIFT_VERSION: "5.9"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
@@ -46,6 +46,9 @@ targets:
       path: CustomWhisper/CustomWhisper.entitlements
       properties:
         com.apple.security.device.audio-input: true
+        # FluidAudio bundles a pre-signed ESpeakNG.framework whose Team ID differs from
+        # this ad-hoc-signed app; hardened runtime rejects it without this.
+        com.apple.security.cs.disable-library-validation: true
 
   CustomWhisperTests:
     type: bundle.unit-test
@@ -59,6 +62,7 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/CustomWhisper.app/Contents/MacOS/CustomWhisper"
         SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: true
 
   CustomWhisperUITests:
     type: bundle.ui-testing
@@ -70,3 +74,4 @@ targets:
     settings:
       base:
         SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: true
